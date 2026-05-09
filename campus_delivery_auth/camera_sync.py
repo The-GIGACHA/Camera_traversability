@@ -69,6 +69,7 @@ class CameraSync:
             '/camera/color/camera_info', CameraInfo
         )
 
+        # slop : 동기화 허용 시간차 -> 타임스탬프에 맞는 프레임만 _internal_callback()으로 넘김
         self._sync = message_filters.ApproximateTimeSynchronizer(
             [self._sub_color, self._sub_depth, self._sub_info],
             queue_size=SYNC_QUEUE_SIZE,
@@ -95,6 +96,7 @@ class CameraSync:
         rospy.loginfo('CameraSync: OFF')
 
     @property
+    # 현재 구독 상태 확인
     def is_active(self) -> bool:
         return self._active
 

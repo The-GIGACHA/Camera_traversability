@@ -20,8 +20,8 @@ from ultralytics import YOLO
 import rospy
 
 
-GESTURE_CONF_THRESH = 0.6
-DEPTH_VALID_MAX_M   = 0.5
+GESTURE_CONF_THRESH = 0.6 # confidence test하면서 최적화
+DEPTH_VALID_MAX_M   = 0.5 
 DEPTH_VALID_MIN_M   = 0.1
 CONFIRM_FRAMES      = 5
 DEPTH_PERCENTILE    = 20

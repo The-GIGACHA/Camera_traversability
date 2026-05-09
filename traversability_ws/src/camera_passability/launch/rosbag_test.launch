@@ -1,0 +1,61 @@
+<!--
+  rosbag_test.launch
+  ==================
+  rosbag 재생 + camera_passability 파이프라인 전체 실행.
+
+  사용법:
+    roslaunch camera_passability rosbag_test.launch bag:=/path/to/your.bag
+
+  선택 인자:
+    bag        : rosbag 파일 경로 (필수)
+    rate       : 재생 속도 배율 (기본 1.0)
+    loop       : 반복 재생 여부 (기본 false)
+    yolo_model : YOLO 모델 경로 (기본 yolov8n.pt)
+
+  TF 주의:
+    rosbag에 /tf 가 없으면 camera_frame → base_link 변환이 없어
+    tf_transformer가 실패합니다.
+    rosbag에 TF가 없는 경우 static_transform_publisher 노드를 추가하세요:
+      (예시 값은 실제 카메라 마운트 위치에 맞게 수정 필요)
+      x=0.3  y=0  z=0.2  yaw=0  pitch=-0.1  roll=0
+-->
+<launch>
+
+  <!-- ── 인자 정의 ─────────────────────────────────────────────────── -->
+  <arg name="bag"        default=""    doc="rosbag 파일 경로"/>
+  <arg name="rate"       default="1.0" doc="재생 속도"/>
+  <arg name="loop_flag" default="" doc="반복 재생 시 '--loop' 여부 전달"/>
+  <arg name="yolo_model" default="yolov8n.pt"/>
+
+  <!-- ── rosbag 재생 ──────────────────────────────────────────────── -->
+  <node pkg="rosbag" type="play" name="rosbag_play"
+        args="$(arg bag) --rate=$(arg rate) $(arg loop_flag)"
+        required="true" output="screen"/>
+
+  <!-- ── TF (rosbag에 /tf 없을 때만 활성화) ───────────────────────── -->
+  <!--
+  <node pkg="tf" type="static_transform_publisher" name="cam_tf"
+        args="0.3 0.0 0.2 0.0 -0.1 0.0 base_link camera_color_optical_frame 100"/>
+  -->
+
+  <!-- ── Traversability costmap 생성 ─────────────────────────────── -->
+  <node pkg="camera_passability" type="Traversability_traversability_node.py"
+        name="traversability_node" output="screen">
+    <param name="yolo_model" value="$(arg yolo_model)"/>
+  </node>
+
+  <!-- ── 동적 장애물 판단 ──────────────────────────────────────────── -->
+  <node pkg="camera_passability" type="camera_passability_node.py"
+        name="camera_passability_node" output="screen">
+    <param name="yolo_model" value="$(arg yolo_model)"/>
+  </node>
+
+  <!-- ── Local path 생성 ──────────────────────────────────────────── -->
+  <node pkg="camera_passability" type="local_path_node.py"
+        name="local_path_node" output="screen"/>
+
+  <!-- ── OpenCV 시각화 ─────────────────────────────────────────────── -->
+  <node pkg="camera_passability" type="visualizer_node.py"
+        name="visualizer_node" output="screen"/>
+
+</launch>

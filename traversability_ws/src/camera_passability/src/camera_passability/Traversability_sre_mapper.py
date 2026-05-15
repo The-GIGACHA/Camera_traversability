@@ -208,13 +208,32 @@ class SREMapper:
     @staticmethod
     def _delta_score(mean_z: np.ndarray) -> np.ndarray:
         """
-        np.diff로 인접 셀 간 높이 차이(절댓값) 계산.
-        NaN 셀은 0으로 채워 gradient 오염 방지.
+        인접 셀 간 높이 차이(절댓값) 계산.
+
+        NaN(데이터 없음) 셀과 valid 셀의 경계에서는 가짜 delta가 생기지
+        않도록 양쪽 모두 valid 한 경우에만 diff를 사용한다.
+
+        과거 구현은 NaN을 0으로 채워서 |0 − ground_noise| 만큼의 fake delta가
+        FOV 경계 모든 셀에 발생, SRE_DELTA_SAT(=0.08m)을 쉽게 넘어
+        saturate → "유령 벽" halo가 visualizer에 보였음.
         """
-        filled = np.where(np.isnan(mean_z), 0.0, mean_z)
-        dz_dy  = np.abs(np.diff(filled, axis=0, append=filled[-1:, :]))
-        dz_dx  = np.abs(np.diff(filled, axis=1, append=filled[:, -1:]))
-        delta  = np.maximum(dz_dy, dz_dx)
+        valid  = ~np.isnan(mean_z)
+        filled = np.where(valid, mean_z, 0.0)
+
+        # 아래 이웃 (axis=0): 양쪽 valid 인 경우에만 diff 채택.
+        # np.diff(..., append=arr[-1:]) → 마지막 행은 자기 자신과 비교(=0).
+        dz_dy = np.abs(np.diff(filled, axis=0, append=filled[-1:, :]))
+        pair_valid_y = np.zeros_like(mean_z, dtype=bool)
+        pair_valid_y[:-1] = valid[:-1] & valid[1:]
+        dz_dy = np.where(pair_valid_y, dz_dy, 0.0)
+
+        # 오른쪽 이웃 (axis=1): 마지막 열도 자기 자신과 비교(=0).
+        dz_dx = np.abs(np.diff(filled, axis=1, append=filled[:, -1:]))
+        pair_valid_x = np.zeros_like(mean_z, dtype=bool)
+        pair_valid_x[:, :-1] = valid[:, :-1] & valid[:, 1:]
+        dz_dx = np.where(pair_valid_x, dz_dx, 0.0)
+
+        delta = np.maximum(dz_dy, dz_dx)
         return np.clip(delta / SRE_DELTA_SAT, 0.0, 1.0)
 
     # ══════════════════════════════════════════════════════════════════ #

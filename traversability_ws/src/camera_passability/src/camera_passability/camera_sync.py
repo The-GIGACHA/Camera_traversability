@@ -17,9 +17,11 @@ Step 1: Color + Depth CompressedImage를 2-way ApproximateTimeSynchronizer로
 """
 
 from typing import Callable, Optional
+import struct
 
 import rospy
 import message_filters
+import cv2
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo, CompressedImage
 
@@ -90,6 +92,51 @@ class CameraSynchronizer:
 
     # ── 이미지 디코딩 ─────────────────────────────────────────────────── #
 
+    def _decode_depth(self, depth_msg: CompressedImage) -> Optional[np.ndarray]:
+        # cv_bridge.compressed_imgmsg_to_cv2가 compressedDepth 포맷에서
+        # 예외 없이 None을 반환하는 버그(Noetic + Ubuntu 20.04)를 우회하기
+        # 위해 헤더 12바이트를 직접 파싱하고 cv2.imdecode를 호출한다.
+        #
+        # compressed_depth_image_transport 페이로드 규약:
+        #   [0..3]  int32   format       (사용 안 함)
+        #   [4..7]  float32 depthQuantA  (inverse-depth 양자화 계수)
+        #   [8..11] float32 depthQuantB
+        #   [12..]  PNG 압축 데이터
+        #
+        # 단위/양자화는 msg.format 문자열로 분기:
+        #   "16UC1; ..." → PNG 안 픽셀이 그대로 mm uint16
+        #   "32FC1; ..." → inverse-depth: depth_m = A / (raw - B)
+        # 파이프라인 뒤쪽(depth_projector / sre_mapper)이 mm를 가정하므로
+        # 32FC1은 미터 환산 후 다시 *1000으로 mm float32로 반환한다.
+        if len(depth_msg.data) <= 12:
+            rospy.logwarn_throttle(5.0, "[camera_sync] depth payload too short")
+            return None
+
+        _fmt_int, quant_a, quant_b = struct.unpack(
+            "iff", bytes(depth_msg.data[:12])
+        )
+        np_arr = np.frombuffer(bytes(depth_msg.data[12:]), np.uint8)
+        raw = cv2.imdecode(np_arr, cv2.IMREAD_UNCHANGED)
+        if raw is None:
+            rospy.logwarn_throttle(5.0, "[camera_sync] PNG imdecode failed")
+            return None
+
+        fmt_str = depth_msg.format or ""
+        if "16UC1" in fmt_str:
+            return raw
+
+        if "32FC1" in fmt_str:
+            raw_f = raw.astype(np.float32)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                depth_m = quant_a / (raw_f - quant_b)
+            depth_m[~np.isfinite(depth_m)] = 0.0
+            return (depth_m * 1000.0).astype(np.float32)
+
+        rospy.logwarn_throttle(
+            5.0, f"[camera_sync] unsupported depth format: '{fmt_str}'"
+        )
+        return None
+
     def _decode_images(
         self,
         color_msg: CompressedImage,
@@ -105,10 +152,7 @@ class CameraSynchronizer:
             return None, None
 
         try:
-            depth_img = self._bridge.compressed_imgmsg_to_cv2(
-                depth_msg,
-                desired_encoding="passthrough",
-            )
+            depth_img = self._decode_depth(depth_msg)
         except Exception as e:
             rospy.logwarn(f"[camera_sync] depth decode failed: {e}")
             return None, None
@@ -138,7 +182,11 @@ class CameraSynchronizer:
             return
 
         color_img, depth_img = self._decode_images(color_msg, depth_msg)
-        if color_img is None or depth_img is None:
+        if color_img is None:
+            rospy.logerr_throttle(2.0, "[camera_sync] color image None — skipping")
+            return
+        if depth_img is None:
+            rospy.logerr_throttle(2.0, "[camera_sync] depth image None — skipping")
             return
 
         self._callback(color_img, depth_img, self._latest_info)

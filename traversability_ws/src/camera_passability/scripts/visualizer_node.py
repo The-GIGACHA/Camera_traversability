@@ -179,14 +179,17 @@ class VisualizerNode:
         for j in range(GRID_W + 1):
             cv2.line(bev, (j * CELL_PX, 0), (j * CELL_PX, BEV_H), (60, 60, 60), 1)
 
-        # ── 동적 장애물 (빨간 원) ──────────────────────────────────── #
+        # ── 동적 장애물 (마젠타 원 + 검은 외곽) ───────────────────── #
+        # LETHAL 셀이 이미 빨간색이라 원도 빨간색이면 묻혀버리므로
+        # 마젠타 + 검은 외곽으로 그려 SRE/static 비용과 시각적으로 분리.
         for xr, yr in dyn_pts:
             gy_f = ORIGIN_GY - xr / SRE_CELL_SIZE_M
             gx_f = ORIGIN_GX - yr / SRE_CELL_SIZE_M
             px = int(gx_f * CELL_PX + CELL_PX // 2)
             py = int(gy_f * CELL_PX + CELL_PX // 2)
             if 0 <= px < BEV_W and 0 <= py < BEV_H:
-                cv2.circle(bev, (px, py), CELL_PX // 2, (0, 0, 255), -1)
+                cv2.circle(bev, (px, py), CELL_PX // 2,     (0, 0, 0),     -1)
+                cv2.circle(bev, (px, py), CELL_PX // 2 - 2, (255, 0, 255), -1)
 
         # ── local path (파란 선 + 점) ──────────────────────────────── #
         path_pixels = []

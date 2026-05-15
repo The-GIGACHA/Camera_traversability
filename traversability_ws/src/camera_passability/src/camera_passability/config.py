@@ -107,7 +107,11 @@ SEG_FREE_DISCOUNT   = 0.6
 SEG_OBSTACLE_COST   = 85
 
 # 포인트 부족 셀 (unknown) 기본값
-SRE_DEFAULT_COST    = 0.5   # 0~1 정규화 기준
+# 0.5 → 0.35 로 낮춤. 카메라 yaw 마운트 오차로 FOV가 비대칭이라
+# 우측 close-range 셀만 SRE 데이터를 받아 cost가 낮게 계산되고, 좌측은
+# DEFAULT 50으로 남아 planner가 우측 경로를 항상 선호하던 문제 완화용.
+# (안전성 trade-off: 미관측 영역의 추정 위험도가 낮아짐. 실주행 시 재검토 필요)
+SRE_DEFAULT_COST    = 0.35  # 0~1 정규화 기준
 
 # ── IMU 보정 (D455 내장 IMU) ─────────────────────────────────────────── #
 
@@ -124,7 +128,9 @@ TOPIC_LOCAL_PATH         = "/camera/local_path"
 LOCAL_PATH_LOOKAHEAD_M   = 3.0
 
 # 좌우 이동 1셀당 추가 비용 — 클수록 직진 선호
-LOCAL_PATH_LATERAL_COST  = 5.0
+# 5.0 → 10.0 으로 올림. 카메라 yaw 비대칭으로 인한 우측 편향을 상쇄해
+# planner가 더 강하게 중앙(직진)을 고수하도록 함.
+LOCAL_PATH_LATERAL_COST  = 10.0
 
 # 이동 평균 스무딩 윈도우 (셀 수)
 LOCAL_PATH_SMOOTH_WINDOW = 5

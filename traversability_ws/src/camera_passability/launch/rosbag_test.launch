@@ -35,27 +35,30 @@
         args="--clock $(arg bag) --rate=$(arg rate) $(arg loop_flag)"
         required="true" output="log"/>
 
-  <!-- ── TF: base_footprint → camera_link 한 단계만 채워줌 ───────── -->
+  <!-- ── TF: base_footprint → camera_link ───────────────────────── -->
   <!--
     args 형식:  x  y  z   yaw  pitch  roll   parent  child  period_ms
-    아래 값들은 PLACEHOLDER이며 실제 1:5 RC카 마운트 측정값으로 교체해야 합니다.
 
-      x      : base_footprint 중심에서 카메라까지의 forward 거리 [m]
-      y      : 좌우 오프셋 [m]. +가 LEFT. 정중앙 마운트면 0.
-               (지난 테스트에서 좌측 +0.2~0.4m에 systematic 빨강 strip이 잡힌 게
-                실측 y를 0으로 둬서 ground point들이 한쪽으로 몰린 결과일 수 있음 —
-                실측 후 갱신 필요)
-      z      : 지면에서 카메라까지 높이 [m]
-      yaw    : Z축 회전 [rad]
-      pitch  : Y축 회전 [rad]. 카메라가 살짝 아래를 보면 음수.
-      roll   : X축 회전 [rad]. 카메라 마운트 기울어짐 보정용.
+    1:5 RC카 실측값 반영 (2026-05-15):
+      x =  0.43   [m]  base_footprint → 카메라 렌즈 forward 거리
+      y = -0.025  [m]  좌우 오프셋. 차를 앞에서 봤을 때 관찰자 LEFT (= 차의 RIGHT)
+                       으로 2.5 cm → base_link 규약 +Y=LEFT 이므로 음수.
+                       만약 의도가 "차 자체의 LEFT" 였다면 +0.025 로 부호 반전 필요.
+      z =  0.995  [m]  지면 → 카메라 렌즈 높이
+      yaw = -0.0873 [rad] (= -5°)  카메라 마운트 회전 가설.
+                       사용자 관찰: "한 5도 정도 돌아가있는 것 같아".
+                       BEV에 systematic LEFT strip 이 잡혔으므로 카메라가
+                       위에서 봤을 때 시계방향(RIGHT)으로 5° 돌아간 것으로 가정.
+                       만약 strip 이 RIGHT 로 옮겨가면 부호 +0.0873 로 반전.
+      pitch = 0.0   [rad] 사용자: "거의 없는 것 같아"
+      roll  = 0.0   [rad]
 
     회전 90° (광학 프레임 정렬)은 rosbag tf_static의 camera_link →
     camera_aligned_depth_to_color_frame → camera_color_optical_frame 체인이
-    이미 정확히 처리하므로, 여기선 로봇-카메라 마운트 회전만 신경 쓰면 됩니다.
+    이미 정확히 처리하므로, 여기선 로봇-카메라 마운트 회전만 선언합니다.
   -->
   <node pkg="tf" type="static_transform_publisher" name="cam_tf"
-        args="0.35 0.0 0.3 0.0 -0.1 0.0 base_footprint camera_link 100"/>
+        args="0.43 -0.025 0.995 -0.0873 0.0 0.0 base_footprint camera_link 100"/>
 
   <!-- ── Traversability costmap 생성 ─────────────────────────────── -->
   <node pkg="camera_passability" type="Traversability_traversability_node.py"

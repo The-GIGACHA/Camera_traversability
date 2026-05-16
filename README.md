@@ -21,7 +21,7 @@
 
 ---
 
-## 아키텍처 한눈에
+## Architecture PipeLine
 
 ```
 RealSense D455
@@ -70,7 +70,7 @@ RealSense D455
 
 ## 모듈 단위 책임 (Module Responsibilities)
 
-`traversability_ws/src/camera_passability/` 패키지 안에 모든 코드가 모여 있어요. ROS 노드 (entry point) 는 `scripts/`, 재사용 가능한 클래스는 `src/camera_passability/` 에 둡니다.
+`traversability_ws/src/camera_passability/` 패키지 안에 모든 코드가 모여 있습니다. ROS 노드 (entry point) 는 `scripts/`, 재사용 가능한 클래스는 `src/camera_passability/` 에 둡니다.
 
 ### scripts/ — ROS 노드
 
@@ -247,7 +247,7 @@ rosnode info /visualizer_node
 
 ## 최근 개선 사항 (Recent Improvements)
 
-이 레포는 rosbag 검증 단계에서 다음 문제들을 순차적으로 잡았습니다. 각 항목은 별도 PR 로 머지됨.
+이 레포는 rosbag 검증 단계에서 다음 문제들을 순차적으로 잡았습니다. 각 항목은 별도 PR 로 merge됨.
 
 | # | 문제 | 해결 |
 |---|---|---|
@@ -275,7 +275,7 @@ rosnode info /visualizer_node
 
 ### Vision Authentication + Cargo Unlock (`campus_delivery_auth/`)
 
-배송 로봇이 목적지 도착(`/robot_state == "ARRIVED"`) 후 수령인을 비전으로 인증하고 적재함을 개방하는 별도 파이프라인. 현재 통과성 모듈 완성 후 착수 예정이라 이 레포에서는 placeholder 디렉터리만 존재. 설계 의도:
+배송 로봇이 목적지 도착(`/robot_state == "ARRIVED"`) 후 수령인을 비전으로 인증하고 적재함을 개방하는 별도 파이프라인. 현재 통과성 모듈 완성 후 착수 예정이라 이 레포에서는 placeholder 디렉터리만 존재(Vibe Coding). 설계 의도:
 
 - 상태 머신 기반 (idle / ARRIVED / NAVIGATING) — 비활성 구간에 카메라 구독 완전 해제로 자원 양보
 - WeChat QR (1차) + Gesture (2차, YOLOv8-gesture) 이중 인증

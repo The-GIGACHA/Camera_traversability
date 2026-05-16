@@ -30,9 +30,12 @@ TOPIC_TRAVERSABILITY_COSTMAP = "/traversability/costmap"
 
 # ── 동적 장애물 파이프라인 ────────────────────────────────────────────── #
 
-ROBOT_WIDTH_M      = 0.4
-SAFETY_MARGIN_M    = 0.4
-PASS_THRESHOLD_M   = ROBOT_WIDTH_M + SAFETY_MARGIN_M   # 0.8 m
+# 실측 1:5 RC카 차폭 (이전 placeholder 0.4 → 0.72)
+ROBOT_WIDTH_M      = 0.72
+# 좌우 각 4 cm 여유. 실측 차폭이 반영되면서 마진은 줄여 PASS_THRESHOLD_M을
+# 이전과 동일한 0.80 m로 유지 (실측 정확도 ↑, 통과성 판단 강도는 유지).
+SAFETY_MARGIN_M    = 0.08
+PASS_THRESHOLD_M   = ROBOT_WIDTH_M + SAFETY_MARGIN_M   # 0.80 m
 
 FOV_DEG     = 120.0
 MAX_RANGE_M = 5.0

@@ -15,7 +15,7 @@
 | Python | 3.8 |
 | 카메라 | Intel RealSense D455 (Color + Aligned Depth + IMU) |
 | 차량 | 1:5 Scale RC car (실측 차폭 0.72 m) |
-| 가속 | YOLOv8n CPU 추론 (필요 시 CUDA) |
+| 가속 | YOLOv8n CPU 추론 (필요 시 CUDA) | -> 추후 모델 학습 후에 TensorRT FP16으로 추론 최적화
 
 > 현재 검증은 **rosbag 재생**으로 진행 중. compressedDepth 토픽을 그대로 처리하므로 실주행 시 카메라 노드 raw 전환 없이도 동일 코드가 동작합니다 (Compressed 토픽 사용 유지가 대역폭 측면에서 유리).
 
@@ -40,7 +40,7 @@ RealSense D455
         ▼                                     ▼
  ┌─────────────────────┐         ┌─────────────────────┐
  │  Dynamic Pipeline   │         │ Traversability      │
- │  (사람·자전거 회피)  │         │ Pipeline (SRE)      │
+ │  (사람·자전거 회피)     │         │ Pipeline (SRE)      │
  ├─────────────────────┤         ├─────────────────────┤
  │ YoloDetector        │         │ YoloDetector mask   │
  │ DepthProjector      │         │ SREMapper           │
@@ -131,7 +131,7 @@ RealSense D455
 
 ## Configuration
 
-`src/camera_passability/config.py` 가 단일 진실의 원천(single source of truth)입니다. 자주 만지는 값:
+`src/camera_passability/config.py` 가 단일 진실의 원천(single source of truth)입니다. 자주 조정하는 파라미터 값:
 
 ### 그리드 / 거리
 
@@ -263,7 +263,7 @@ rosnode info /visualizer_node
 
 ## 알려진 한계 (Known Limitations)
 
-- **카메라 자연 사각지대**: D455 RGB 수직 FOV 58° + 카메라 높이 0.995 m + pitch≈0 → 전방 ~2.2 m 이하 ground 가 카메라에 안 보임. BEV 하단부가 항상 default 노랑. 가까운 정적 장애물(연석, 쓰레기통 등)은 동적 파이프라인(YOLO)만 잡을 수 있어 안전 사각지대. **카메라 down-pitch 또는 보조 센서(소나/lidar) 가 권장 해결책**.
+- **카메라 자연 사각지대**: D455 RGB 수직 FOV 58° + 카메라 높이 0.995 m + pitch≈0 → 전방 ~2.2 m 이하 ground 가 카메라에 안 보임. BEV 하단부가 항상 default 노랑. 가까운 정적 장애물(연석, 쓰레기통 등)은 동적 파이프라인(YOLO)만 잡을 수 있어 안전 사각지대. **카메라 down-pitch 또는 보조 센서(소나/lidar) 가 권장 해결책(약 5~10°도 정도)**.
 - **YOLO 한정 클래스**: 현재 `person`, `bicycle` 만 동적으로 처리. 추후 차량·전동킥보드 등 확장 예정.
 - **Seg layer**: `CostmapPublisher.publish(seg_grid=None)` 으로 비활성. YOLOv8-seg 팀원 출력 연결 시 활성화.
 - **Lidar layer**: `/traversability/lidar_layer` 구독 stub 만 존재. 라이다 팀이 같은 그리드 규약으로 발행하면 자동 오버레이.

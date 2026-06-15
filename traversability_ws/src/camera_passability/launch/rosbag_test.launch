@@ -45,11 +45,11 @@
                        으로 2.5 cm → base_link 규약 +Y=LEFT 이므로 음수.
                        만약 의도가 "차 자체의 LEFT" 였다면 +0.025 로 부호 반전 필요.
       z =  0.995  [m]  지면 → 카메라 렌즈 높이
-      yaw = -0.0873 [rad] (= -5°)  카메라 마운트 회전 가설.
-                       사용자 관찰: "한 5도 정도 돌아가있는 것 같아".
-                       BEV에 systematic LEFT strip 이 잡혔으므로 카메라가
-                       위에서 봤을 때 시계방향(RIGHT)으로 5° 돌아간 것으로 가정.
-                       만약 strip 이 RIGHT 로 옮겨가면 부호 +0.0873 로 반전.
+      yaw   = 0.0   [rad]  카메라 마운트를 물리적으로 수평 정렬한 후 값.
+                       이전 버전은 -0.0873 (= -5°) 로 SW 보정했었으나,
+                       2026-05-23 부터 마운트 자체를 펴서 정렬했으므로 0 으로 복귀.
+                       만약 BEV에 한쪽으로 systematic strip 또는 비대칭 노랑/초록 분포가
+                       남으면 ±0.01~0.03 rad (±0.6°~1.7°) 범위에서 미세 튜닝.
       pitch = 0.0   [rad] 사용자: "거의 없는 것 같아"
       roll  = 0.0   [rad]
 
@@ -58,7 +58,7 @@
     이미 정확히 처리하므로, 여기선 로봇-카메라 마운트 회전만 선언합니다.
   -->
   <node pkg="tf" type="static_transform_publisher" name="cam_tf"
-        args="0.43 -0.025 0.995 -0.0873 0.0 0.0 base_footprint camera_link 100"/>
+        args="0.43 -0.025 0.995 0.0 0.0 0.0 base_footprint camera_link 100"/>
 
   <!-- ── Traversability costmap 생성 ─────────────────────────────── -->
   <node pkg="camera_passability" type="Traversability_traversability_node.py"

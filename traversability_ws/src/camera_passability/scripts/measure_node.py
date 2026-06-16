@@ -26,6 +26,7 @@ measure_node.py  (ROS1)
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from typing import Deque, Dict, List
 
@@ -39,9 +40,9 @@ from sensor_msgs.msg import CompressedImage, PointCloud2
 _CAM_BUF_SIZE = 600          # ~20s @ 30Hz, 충분히 넉넉
 _INTERIM_PERIOD_SEC = 10.0   # interim 통계 출력 주기
 
-# SRE_DEFAULT_COST=0.35 × 100 = 35. 정확히 35인 셀을 default 로 본다.
-# (config.py 가 변경되면 여기도 함께 갱신할 것)
-_DEFAULT_COST_INT = 35
+# SRE_DEFAULT_COST=0.35 가 float32 * 100 → int8 변환 시 truncate 되어
+# 셀 값이 34 또는 35로 떨어진다. range 로 default 영역 판별.
+_DEFAULT_LO, _DEFAULT_HI = 33, 36
 
 
 class MeasureNode:
@@ -63,7 +64,9 @@ class MeasureNode:
         self._costmap_msg_count = 0
         self._dyn_msg_count = 0
         self._path_msg_count = 0
-        self._start_wall = rospy.Time.now().to_sec()
+        # wall-clock 기준. rospy.Time.now() 는 use_sim_time=true 환경에서
+        # /clock 미수신 시 0 으로 초기화돼서 elapsed 계산이 망가짐.
+        self._start_wall = time.time()
 
         # ── 구독자 ────────────────────────────────────────────────── #
         rospy.Subscriber(
@@ -101,7 +104,7 @@ class MeasureNode:
 
     def _cam_cb(self, msg: CompressedImage) -> None:
         stamp_ns = msg.header.stamp.to_nsec()
-        wall_ns = rospy.Time.now().to_nsec()
+        wall_ns = int(time.time() * 1e9)
         self._cam_arrival[stamp_ns] = wall_ns
         self._cam_arrival_order.append(stamp_ns)
         self._cam_msg_count += 1
@@ -119,14 +122,14 @@ class MeasureNode:
         # E2E latency — 같은 stamp 의 카메라 frame 도착 시각과 비교
         stamp_ns = msg.header.stamp.to_nsec()
         if stamp_ns in self._cam_arrival:
-            wall_ns = rospy.Time.now().to_nsec()
+            wall_ns = int(time.time() * 1e9)
             latency_ms = (wall_ns - self._cam_arrival[stamp_ns]) / 1e6
             self._costmap_latencies_ms.append(latency_ms)
 
-        # FOV coverage — default cost 가 아닌 셀 비율
+        # FOV coverage — default cost(SRE_DEFAULT_COST=0.35) 영역이 아닌 셀 비율
         grid = np.asarray(msg.data, dtype=np.int16)
         if grid.size > 0:
-            non_default = int(np.sum(grid != _DEFAULT_COST_INT))
+            non_default = int(np.sum((grid < _DEFAULT_LO) | (grid > _DEFAULT_HI)))
             self._coverage_ratios.append(non_default / grid.size)
 
     def _dyn_cb(self, msg: PointCloud2) -> None:
@@ -142,7 +145,7 @@ class MeasureNode:
     # ══════════════════════════════════════════════════════════════════ #
 
     def _interim_cb(self, _event) -> None:
-        elapsed = rospy.Time.now().to_sec() - self._start_wall
+        elapsed = time.time() - self._start_wall
         if elapsed < 1.0:
             return
         rospy.loginfo(
@@ -156,7 +159,7 @@ class MeasureNode:
         )
 
     def _final_report(self) -> None:
-        elapsed = max(1e-3, rospy.Time.now().to_sec() - self._start_wall)
+        elapsed = max(1e-3, time.time() - self._start_wall)
 
         def fmt_stats(arr, name: str, unit: str = "") -> str:
             if not arr:

@@ -42,7 +42,10 @@ class TraversabilityNode:
         rospy.init_node("traversability_node", anonymous=False)
 
         # ── 파이프라인 구성 요소 ──────────────────────────────────────── #
-        self._yolo      = YoloDetector()
+        # ~yolo_model 파라미터로 .pt / .onnx / .engine 등 swap 가능.
+        # 미지정 시 YoloDetector 기본값(config.YOLO_MODEL_PATH).
+        yolo_model = rospy.get_param("~yolo_model", "")
+        self._yolo      = YoloDetector(model_path=yolo_model) if yolo_model else YoloDetector()
         self._sre       = SREMapper()
         self._costmap   = CostmapPublisher()
 

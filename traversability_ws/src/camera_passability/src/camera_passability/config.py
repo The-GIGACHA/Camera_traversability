@@ -7,12 +7,33 @@ config.py
 import os as _os
 
 # ── YOLO 모델 경로 ────────────────────────────────────────────────────── #
-# 이 파일(config.py)이 있는 디렉터리 = camera_passability 패키지 루트
-# src/camera_passability/config.py → 두 단계 위가 패키지 루트
-_SRC_CA_DIR = _os.path.dirname(_os.path.abspath(__file__))  # src/camera_passability/
-_SRC_DIR    = _os.path.dirname(_SRC_CA_DIR)                 # src/
-_PKG_DIR    = _os.path.dirname(_SRC_DIR)                    # camera_passability/ (루트)
-YOLO_MODEL_PATH = _os.path.join(_PKG_DIR, "weights", "yolov8n.pt")
+# 파일 위치 계층 (config.py 기준):
+#   _SRC_CA_DIR : <ws>/src/camera_passability/src/camera_passability/
+#   _SRC_DIR    : <ws>/src/camera_passability/src/
+#   _PKG_DIR    : <ws>/src/camera_passability/          (ROS 패키지 루트)
+#   _WS_DIR     : <ws>/                                 (catkin 워크스페이스 루트)
+_SRC_CA_DIR = _os.path.dirname(_os.path.abspath(__file__))
+_SRC_DIR    = _os.path.dirname(_SRC_CA_DIR)
+_PKG_DIR    = _os.path.dirname(_SRC_DIR)
+_WS_DIR     = _os.path.dirname(_os.path.dirname(_PKG_DIR))
+
+# 모델은 워크스페이스 루트(traversability_ws/yolov8n.pt) 에 둔다고 가정.
+# 패키지 내부 weights/ 디렉터리에 두는 게 더 깔끔하지만 사용자가 ws 루트 방식 선호.
+# launch 인자 yolo_model:=<absolute path> 로 언제든지 override 가능
+# (Traversability/camera_passability 노드가 ~yolo_model 파라미터 읽음).
+def _resolve_yolo_model() -> str:
+    """존재하는 후보 중 첫 번째 반환. 없으면 ws 루트의 yolov8n.pt 를 default 로."""
+    candidates = [
+        _os.path.join(_WS_DIR, "yolov8n.pt"),                 # 사용자 현재 배치 (1순위)
+        _os.path.join(_PKG_DIR, "weights", "yolov8n.pt"),    # 관례적 위치
+        _os.path.join(_WS_DIR, "weights", "yolov8n.pt"),     # ws/weights/ 가능성
+    ]
+    for c in candidates:
+        if _os.path.exists(c):
+            return c
+    return candidates[0]   # 못 찾으면 ws 루트 경로 반환 (Ultralytics 가 자동 다운로드 시도)
+
+YOLO_MODEL_PATH = _resolve_yolo_model()
 
 # ── 프레임 / 토픽 ─────────────────────────────────────────────────────── #
 

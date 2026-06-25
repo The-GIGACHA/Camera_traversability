@@ -29,24 +29,23 @@ import threading
 import cv2
 import numpy as np
 import rospy
-import message_filters
 import sensor_msgs.point_cloud2 as pc2
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import OccupancyGrid, Path
+from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import CompressedImage, PointCloud2
 from std_msgs.msg import Bool
-    
+
 from camera_passability.config import (
     SRE_CELL_SIZE_M,
     SRE_MAX_RANGE_M,
     SRE_HALF_WIDTH_M,
     TOPIC_TRAVERSABILITY_COSTMAP,
-    TOPIC_LOCAL_PATH,
     TOPIC_DYNAMIC_OBSTACLES,
     TOPIC_PASSABLE,
     TOPIC_COLOR_COMPRESSED,
 )
+# NOTE: local path 시각화는 제거됨. 경로 산출은 판단/제어팀 책임으로 분리.
+# 본 visualizer 는 Costmap + Dynamic obstacle 까지만 표시.
 
 # ── 그리드 상수 ───────────────────────────────────────────────────────── #
 GRID_H    = int(SRE_MAX_RANGE_M  / SRE_CELL_SIZE_M)   # 25
@@ -87,10 +86,9 @@ class VisualizerNode:
         self._bridge = CvBridge()
         self._lock   = threading.Lock()
 
-        # 최신 데이터 캐시
+        # 최신 데이터 캐시 (local path 는 표시하지 않으므로 제거)
         self._cam_img:    np.ndarray | None = None
         self._costmap:    np.ndarray | None = None   # (GRID_H, GRID_W) float32
-        self._path_poses: list              = []      # List[PoseStamped]
         self._dyn_pts:    list              = []      # List[(x, y)]
         self._passable:   bool              = True
 
@@ -102,10 +100,6 @@ class VisualizerNode:
         rospy.Subscriber(
             TOPIC_TRAVERSABILITY_COSTMAP, OccupancyGrid,
             self._costmap_cb, queue_size=1,
-        )
-        rospy.Subscriber(
-            TOPIC_LOCAL_PATH, Path,
-            self._path_cb, queue_size=1,
         )
         rospy.Subscriber(
             TOPIC_DYNAMIC_OBSTACLES, PointCloud2,
@@ -137,10 +131,6 @@ class VisualizerNode:
         with self._lock:
             self._costmap = grid
 
-    def _path_cb(self, msg: Path) -> None:
-        with self._lock:
-            self._path_poses = list(msg.poses)
-
     def _cloud_cb(self, msg: PointCloud2) -> None:
         pts = [
             (float(p[0]), float(p[1]))
@@ -160,7 +150,6 @@ class VisualizerNode:
     def _render_bev(
         self,
         costmap: np.ndarray,
-        path_poses: list,
         dyn_pts: list,
     ) -> np.ndarray:
         bev = np.zeros((BEV_H, BEV_W, 3), dtype=np.uint8)
@@ -190,23 +179,6 @@ class VisualizerNode:
             if 0 <= px < BEV_W and 0 <= py < BEV_H:
                 cv2.circle(bev, (px, py), CELL_PX // 2,     (0, 0, 0),     -1)
                 cv2.circle(bev, (px, py), CELL_PX // 2 - 2, (255, 0, 255), -1)
-
-        # ── local path (파란 선 + 점) ──────────────────────────────── #
-        path_pixels = []
-        for pose in path_poses:
-            xr = pose.pose.position.x
-            yr = pose.pose.position.y
-            gy_f = ORIGIN_GY - xr / SRE_CELL_SIZE_M
-            gx_f = ORIGIN_GX - yr / SRE_CELL_SIZE_M
-            px = int(gx_f * CELL_PX + CELL_PX // 2)
-            py = int(gy_f * CELL_PX + CELL_PX // 2)
-            path_pixels.append((px, py))
-
-        for i in range(1, len(path_pixels)):
-            cv2.line(bev, path_pixels[i - 1], path_pixels[i], (255, 100, 0), 2)
-        for px, py in path_pixels:
-            if 0 <= px < BEV_W and 0 <= py < BEV_H:
-                cv2.circle(bev, (px, py), 3, (255, 200, 0), -1)
 
         # ── 로봇 위치 (흰 삼각형) ──────────────────────────────────── #
         robot_px = ORIGIN_GX * CELL_PX + CELL_PX // 2
@@ -248,7 +220,6 @@ class VisualizerNode:
             with self._lock:
                 cam_img    = self._cam_img.copy()    if self._cam_img    is not None else None
                 costmap    = self._costmap.copy()    if self._costmap    is not None else None
-                path_poses = list(self._path_poses)
                 dyn_pts    = list(self._dyn_pts)
                 passable   = self._passable
 
@@ -269,7 +240,7 @@ class VisualizerNode:
 
             # ── BEV 패널 ──────────────────────────────────────────── #
             if costmap is not None:
-                bev_panel = self._render_bev(costmap, path_poses, dyn_pts)
+                bev_panel = self._render_bev(costmap, dyn_pts)
             else:
                 bev_panel = np.zeros((BEV_H, BEV_W, 3), dtype=np.uint8)
                 cv2.putText(bev_panel, "Waiting for costmap...",

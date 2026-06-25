@@ -261,7 +261,7 @@ rosnode info /visualizer_node
 
 ---
 
-## 알려진 한계 (Known Limitations)
+## Known Limitations
 
 - **카메라 자연 사각지대**: D455 RGB 수직 FOV 58° + 카메라 높이 0.995 m + pitch≈0 →  **~2.23m 부근까지 카메라로 잡히지 않는 객체 존재 가능, 멀리서 부터 잡더라도 근접 시 움직임 변화를 탐지하기 위해 카메라 down-pitch 또는 보조 센서(소나/lidar) 가 권장 해결책(약 5~10°도 정도)**.
 - **YOLO 한정 클래스**: 현재 `person`, `bicycle` 만 동적으로 처리. 추후 차량·전동킥보드 등 확장 예정.

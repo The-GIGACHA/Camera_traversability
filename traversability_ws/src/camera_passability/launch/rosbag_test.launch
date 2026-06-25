@@ -72,9 +72,16 @@
     <param name="yolo_model" value="$(arg yolo_model)"/>
   </node>
 
-  <!-- ── Local path 생성 ──────────────────────────────────────────── -->
+  <!-- ── Local path 생성 (비활성) ─────────────────────────────────── -->
+  <!--
+    Local path 계획·발행은 판단/제어팀 책임으로 분리됨.
+    본 패키지는 Costmap 산출까지만 담당. 향후 디버깅 / reference 용도로
+    필요하면 아래 주석 해제하여 다시 활성화.
+  -->
+  <!--
   <node pkg="camera_passability" type="local_path_node.py"
         name="local_path_node" output="screen"/>
+  -->
 
   <!-- ── OpenCV 시각화 ─────────────────────────────────────────────── -->
   <node pkg="camera_passability" type="visualizer_node.py"

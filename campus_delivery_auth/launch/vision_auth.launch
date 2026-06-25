@@ -1,0 +1,31 @@
+<launch>
+  <!-- ============================================================== -->
+  <!--  적재함 비전 인증 + 개방 통합 런치                              -->
+  <!--                                                                -->
+  <!--  테스트(하드웨어/카메라 없이):                                  -->
+  <!--    roslaunch campus_delivery_auth vision_auth.launch \         -->
+  <!--             auth_bypass:=true mock:=true                       -->
+  <!--    rostopic pub -1 /robot_state std_msgs/String "data: ARRIVED"-->
+  <!-- ============================================================== -->
+
+  <arg name="auth_bypass"     default="false"/>  <!-- true: 카메라 없이 즉시 인증 -->
+  <arg name="mock"            default="false"/>  <!-- true: 시리얼 없이 로그만 -->
+  <arg name="port"            default="/dev/ttyUSB0"/>
+  <arg name="baud"            default="115200"/>
+  <arg name="auto_relock_sec" default="0.0"/>
+
+  <!-- 비전 인증 상태머신: /robot_state → (QR→제스처) → /cargo_unlock -->
+  <node pkg="campus_delivery_auth" type="vision_auth_node.py"
+        name="vision_auth_node" output="screen">
+    <param name="auth_bypass" value="$(arg auth_bypass)"/>
+  </node>
+
+  <!-- 적재함 액추에이터: /cargo_unlock → 시리얼(서보/릴레이) -->
+  <node pkg="campus_delivery_auth" type="cargo_actuator_node.py"
+        name="cargo_actuator_node" output="screen">
+    <param name="port"            value="$(arg port)"/>
+    <param name="baud"            value="$(arg baud)"/>
+    <param name="mock"            value="$(arg mock)"/>
+    <param name="auto_relock_sec" value="$(arg auto_relock_sec)"/>
+  </node>
+</launch>

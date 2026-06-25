@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>campus_delivery_auth</name>
+  <version>0.1.0</version>
+  <description>
+    비전 기반 수령인 인증(WeChat QR 1차 + 제스처 2차) 및 적재함 개방 모듈.
+    1:5 스케일 자율주행 배송 로봇용. ROS1 (Noetic).
+  </description>
+
+  <maintainer email="ktk982028@gmail.com">GIGACHA</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>message_filters</depend>
+
+  <!-- 런타임 외부 의존성 (rosdep 관리 밖, pip 설치):
+       ultralytics, opencv-contrib-python(wechat_qrcode), pyserial -->
+  <exec_depend>python3-numpy</exec_depend>
+</package>

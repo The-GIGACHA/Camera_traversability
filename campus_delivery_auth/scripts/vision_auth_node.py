@@ -23,9 +23,9 @@ import rospy
 from std_msgs.msg import Bool, String
 from sensor_msgs.msg import CameraInfo
 
-from camera_sync import CameraSync
-from qr_scanner import QRScanner
-from gesture_recognizer import GestureRecognizer
+from campus_delivery_auth.camera_sync import CameraSync
+from campus_delivery_auth.qr_scanner import QRScanner
+from campus_delivery_auth.gesture_recognizer import GestureRecognizer
 
 
 # ── 파라미터 상수 ──────────────────────────────────────────────────────── #
@@ -54,6 +54,12 @@ class VisionAuthNode:
 
     def __init__(self) -> None:
         rospy.init_node('vision_auth_node', anonymous=False)
+
+        # ── 파라미터 ──────────────────────────────────────────────────── #
+        # auth_bypass: 카메라/모델 없이 ARRIVED → 즉시 AUTHENTICATED (벤치 테스트용)
+        self._auth_bypass = bool(rospy.get_param('~auth_bypass', False))
+        if self._auth_bypass:
+            rospy.logwarn('auth_bypass=True — 인증 단계를 건너뜁니다 (테스트 모드)')
 
         # ── 서브모듈 ──────────────────────────────────────────────────── #
         self._camera_sync = CameraSync()
@@ -95,8 +101,12 @@ class VisionAuthNode:
 
         elif cmd == 'ARRIVED':
             if self._state == AuthState.IDLE:
-                rospy.loginfo('ARRIVED → QR_SCANNING')
-                self._transition(AuthState.QR_SCANNING)
+                if self._auth_bypass:
+                    rospy.logwarn('ARRIVED + auth_bypass → AUTHENTICATED')
+                    self._transition(AuthState.AUTHENTICATED)
+                else:
+                    rospy.loginfo('ARRIVED → QR_SCANNING')
+                    self._transition(AuthState.QR_SCANNING)
             else:
                 rospy.logwarn(
                     f'ARRIVED ignored: current state is {self._state.value}'

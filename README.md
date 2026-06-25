@@ -2,7 +2,7 @@
 
 1:5 scale RC car의 실주행 환경에서 RealSense D455 한 대만으로 **정적 지면 거칠기(Traversability) costmap + 동적 객체 통과성(Passability) 판단 + Local Path 생성**까지 처리하는 ROS1 패키지.
 
-장기적으로 **(1) 통과성·주행 모듈** 과 **(2) 비전 인증·적재함 개방 모듈** 두 축으로 구성되지만, 현재 레포의 활성 작업 범위는 **(1) 통과성·주행 모듈** 입니다. (2) 모듈은 future work — [Future Work](#future-work) 참고.
+**(1) 통과성·주행 모듈** 과 **(2) 비전 인증·적재함 개방 모듈** 두 축으로 구성됩니다. (1)은 주력 모듈이고, (2) `campus_delivery_auth` 는 구현 완료되어 벤치 테스트가 가능하며 네비 통합·현장 검증 단계입니다 — [적재함 비전 인증 & 개방 모듈](#적재함-비전-인증--개방-모듈-campus_delivery_auth) 참고.
 
 ---
 
@@ -273,20 +273,69 @@ rosnode info /visualizer_node
 
 ## Future Work
 
-### Vision Authentication + Cargo Unlock (`campus_delivery_auth/`)
-
-배송 로봇이 목적지 도착(`/robot_state == "ARRIVED"`) 후 수령인을 비전으로 인증하고 적재함을 개방하는 별도 파이프라인. 현재 통과성 모듈 완성 후 착수 예정이라 이 레포에서는 placeholder 디렉터리만 존재(Vibe Coding). 설계 의도:
-
-- 상태 머신 기반 (idle / ARRIVED / NAVIGATING) — 비활성 구간에 카메라 구독 완전 해제로 자원 양보
-- WeChat QR (1차) + Gesture (2차, YOLOv8-gesture) 이중 인증
-- aligned_depth 로 카메라 ≤ 0.5 m 객체만 유효 인증으로 처리 (혼잡 환경 오인식 방지)
-- 인증 성공 시 `/cargo_unlock` (`std_msgs/Bool`) 발행 → 제어팀이 CAN/Arduino 로 적재함 잠금 해제
-
-상세 설계는 통과성 모듈 안정화 후 별도 PR.
+> **참고:** (2) 비전 인증·적재함 개방 모듈(`campus_delivery_auth/`)은 더 이상 future work 가 아니라
+> **구현 완료 — 벤치 테스트 가능** 단계입니다. 상세는 아래 [적재함 비전 인증 & 개방 모듈](#적재함-비전-인증--개방-모듈-campus_delivery_auth) 참고.
+> 남은 작업: `arrival_monitor_node`(네비 도착 판정 자동 발행), `GESTURE_AUTH` 타임아웃 상수 분리, 재잠금 정책 확정.
 
 ### Local path → 경로 추종
 
 현재는 path 발행까지만. 실제 차량 조향·속도 제어는 주행 제어팀과 인터페이스 합의 후 별도 노드 (예: `path_tracker_node.py`) 로 분리 예정.
+
+---
+
+## 적재함 비전 인증 & 개방 모듈 (`campus_delivery_auth`)
+
+배송 로봇이 목적지 도착(`/robot_state == "ARRIVED"`) 후 수령인을 비전으로 인증하고
+적재함을 개방하는 독립 ROS1 패키지. **구현 완료 — 벤치 테스트 가능.**
+
+### 동작 흐름
+
+```
+arrival_monitor ──/robot_state──► vision_auth_node ──/cargo_unlock──► cargo_actuator ──serial──► MCU(서보/릴레이)
+  (네비 도착판정)               (QR 1차→제스처 2차 FSM)              (pyserial, mock 폴백)
+```
+
+### 인증 상태머신 (`vision_auth_node`)
+
+`IDLE → QR_SCANNING → GESTURE_AUTH → AUTHENTICATED / AUTH_FAILED`
+
+- **1차** WeChat QR + aligned_depth 거리(0.1–0.5 m) + 코드 해시 검증
+- **2차** YOLOv8-pose 제스처(만세) 5프레임 연속 확인
+- `NAVIGATING` 수신 시 어느 상태든 즉시 `IDLE` 복귀 → 카메라 구독 완전 해제(자원 양보)
+- 인증 성공 시 `/cargo_unlock` (`std_msgs/Bool`) 3회 발행
+- `~auth_bypass:=true` 면 카메라/모델 없이 `ARRIVED` → 즉시 인증 (벤치 테스트용)
+
+### 적재함 액추에이터 (`cargo_actuator_node`)
+
+- `/cargo_unlock` 구독 → **시리얼(pyserial)** 로 `UNLOCK` 전송 (서보/릴레이 MCU)
+- 중복 명령 디바운스(5 s), `~auto_relock_sec` 로 자동 재잠금 옵션
+- pyserial 미설치 / 포트 열기 실패 시 **mock 모드 자동 폴백** → 하드웨어 없이 흐름 검증 가능
+
+### 토픽
+
+| 토픽 | 타입 | 방향 |
+|------|------|------|
+| `/robot_state` | `std_msgs/String` | arrival_monitor → vision_auth (`ARRIVED`/`NAVIGATING`) |
+| `/cargo_unlock` | `std_msgs/Bool` | vision_auth → cargo_actuator |
+
+### 실행 / 테스트
+
+```bash
+# 카메라·하드웨어 없이 인증→개방 체인 검증
+roslaunch campus_delivery_auth vision_auth.launch auth_bypass:=true mock:=true
+rostopic pub -1 /robot_state std_msgs/String "data: ARRIVED"
+
+# 실제 인증: auth_bypass:=false + 카메라 + 모델 파일(weights/yolov8n-pose.pt, models/wechat_qr/*)
+
+# ROS 없이 시리얼 드라이버 단위 테스트
+python3 campus_delivery_auth/test/test_serial_driver_offline.py
+```
+
+### 남은 작업
+
+- `arrival_monitor_node` — 네비 도착 판정 → `/robot_state` 자동 발행 (현재 수동 `rostopic pub`)
+- `GESTURE_AUTH` 타임아웃 의미 정리(상수 분리)
+- 재잠금 정책 확정 (MCU 자동 / `auto_relock_sec` / 적재완료 버튼)
 
 ---
 
@@ -320,5 +369,10 @@ traversability_ws/
 │       └── setup.py
 └── (devel/, build/ 등 빌드 산출물)
 
-campus_delivery_auth/                        ← future work, 현재 stub
+campus_delivery_auth/                        ← 적재함 비전 인증 & 개방 (구현 완료)
+├── scripts/   vision_auth_node.py · cargo_actuator_node.py
+├── src/campus_delivery_auth/  camera_sync · qr_scanner · gesture_recognizer · serial_driver
+├── launch/vision_auth.launch
+├── test/test_serial_driver_offline.py
+└── weights/ · models/wechat_qr/
 ```

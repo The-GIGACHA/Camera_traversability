@@ -1,0 +1,90 @@
+<!--
+  traversability_live.launch
+  ==========================
+  실주행용 — RealSense 라이브 카메라 + Traversability Costmap 파이프라인.
+  rosbag_test.launch 의 실차 버전 (rosbag 재생 / use_sim_time 없음).
+
+  사용법 (판단/제어팀):
+    # (A) 이 launch 가 카메라까지 직접 띄우는 경우
+    roslaunch camera_passability traversability_live.launch
+
+    # (B) 제어팀 bringup 이 이미 realsense 를 띄우는 경우 → 카메라 중복 실행 방지
+    roslaunch camera_passability traversability_live.launch camera:=false
+
+    # (C) 모니터에 BEV 시각화 창까지 띄우고 싶을 때 (headless 로봇 PC면 생략)
+    roslaunch camera_passability traversability_live.launch viz:=true
+
+  선택 인자:
+    camera     : realsense2_camera 를 이 launch 가 직접 실행할지 (기본 true)
+    viz        : OpenCV BEV 시각화 창 (기본 false — headless PC 고려)
+    yolo_model : YOLO 모델 경로 (기본 yolov8n.pt, 워크스페이스 루트에서 자동 탐색)
+
+  출력 토픽 (판단/제어팀 구독 대상):
+    /traversability/costmap        (nav_msgs/OccupancyGrid, frame=base_footprint)
+    /dynamic_obstacles/pointcloud  (sensor_msgs/PointCloud2, frame=base_footprint)
+    /dynamic_obstacles/passable    (std_msgs/Bool)
+
+  선행 조건 (apt 설치 필요):
+    ros-noetic-realsense2-camera
+    ros-noetic-compressed-image-transport
+    ros-noetic-compressed-depth-image-transport   # compressedDepth 토픽 자동 발행에 필수
+    + Python: ultralytics, opencv-python, cv_bridge
+
+  TF 주의:
+    realsense2_camera 가 camera_link → ... → camera_color_optical_frame 내부 체인을
+    발행하므로, 아래 static TF 는 base_footprint → camera_link 한 단계만 채운다.
+    child 를 camera_color_optical_frame 으로 잡으면 다중 부모 충돌로 lookup 이 실패한다.
+-->
+<launch>
+  <!-- 실주행은 wall-clock 사용 — use_sim_time 을 명시적으로 false 로 둔다. -->
+  <param name="use_sim_time" value="false"/>
+
+  <arg name="camera"     default="true"  doc="realsense2_camera 를 직접 실행할지"/>
+  <arg name="viz"        default="false" doc="OpenCV BEV 시각화 창 (headless 면 false)"/>
+  <arg name="yolo_model" default="yolov8n.pt"/>
+
+  <!-- ── RealSense 라이브 카메라 ──────────────────────────────────── -->
+  <!--
+    제어팀 bringup 이 이미 카메라를 띄우면 camera:=false 로 중복 실행을 막는다.
+    Color/Depth 의 compressed·compressedDepth 토픽은 image_transport 플러그인이
+    자동 발행하므로 별도 republish 노드는 필요 없다 (위 apt 패키지 설치 전제).
+  -->
+  <group if="$(arg camera)">
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+      <arg name="align_depth"      value="true"/>
+      <arg name="enable_color"     value="true"/>
+      <arg name="enable_depth"     value="true"/>
+      <arg name="enable_gyro"      value="true"/>
+      <arg name="enable_accel"     value="true"/>
+      <arg name="unite_imu_method" value="linear_interpolation"/>
+    </include>
+  </group>
+
+  <!-- ── TF: base_footprint → camera_link (1:5 RC카 실측값) ───────── -->
+  <!--
+    args:  x  y  z   yaw  pitch  roll   parent  child  period_ms
+    x=0.43  y=-0.025  z=0.995  (m) / yaw=pitch=roll=0 (수평 정렬 후)
+    ※ 카메라 마운트를 바꾸면 이 값들을 다시 실측해 갱신할 것.
+  -->
+  <node pkg="tf" type="static_transform_publisher" name="cam_tf"
+        args="0.43 -0.025 0.995 0.0 0.0 0.0 base_footprint camera_link 100"/>
+
+  <!-- ── Traversability costmap 생성 ─────────────────────────────── -->
+  <node pkg="camera_passability" type="Traversability_traversability_node.py"
+        name="traversability_node" output="screen">
+    <param name="yolo_model" value="$(arg yolo_model)"/>
+  </node>
+
+  <!-- ── 동적 장애물 판단 ──────────────────────────────────────────── -->
+  <node pkg="camera_passability" type="camera_passability_node.py"
+        name="camera_passability_node" output="screen">
+    <param name="yolo_model" value="$(arg yolo_model)"/>
+  </node>
+
+  <!-- ── OpenCV 시각화 (선택) ──────────────────────────────────────── -->
+  <group if="$(arg viz)">
+    <node pkg="camera_passability" type="visualizer_node.py"
+          name="visualizer_node" output="screen"/>
+  </group>
+
+</launch>

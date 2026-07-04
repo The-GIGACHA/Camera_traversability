@@ -215,7 +215,7 @@ class SREMapper:
 
         과거 구현은 NaN을 0으로 채워서 |0 − ground_noise| 만큼의 fake delta가
         FOV 경계 모든 셀에 발생, SRE_DELTA_SAT(=0.08m)을 쉽게 넘어
-        saturate → "유령 벽" halo가 visualizer에 보였음.
+        saturate → "유령 벽" halo가 visualizer에 보였음.(해결 완)
         """
         valid  = ~np.isnan(mean_z)
         filled = np.where(valid, mean_z, 0.0)
